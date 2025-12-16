@@ -11,9 +11,6 @@ from safety_pipeline.safety_detection import ViolationDetector
 from safety_pipeline.training import train_baseline, train_safety_aware
 
 
-MODEL_NAME = "tiiuae/falcon-7b-instruct"  # loaded in 4-bit quantized mode by the training utilities
-
-
 def main() -> None:
     # Task 1–3: dataset loading, validation, labeling, and formatting
     dataset_dict = create_sft_dataset()
@@ -22,13 +19,13 @@ def main() -> None:
     detector = ViolationDetector()
 
     # Task 4: baseline fine-tuning
-    baseline_artifacts = train_baseline(train_ds, model_name=MODEL_NAME, output_dir="artifacts/baseline")
+    baseline_artifacts = train_baseline(train_ds, model_name="tiiuae/falcon-7b-instruct", output_dir="artifacts/baseline")
 
     # Task 5–6: safety-aware scoring and fine-tuning
     scored_ds = annotate_violation_scores(train_ds, detector)
     safety_artifacts = train_safety_aware(
         scored_ds,
-        model_name=MODEL_NAME,
+        model_name="tiiuae/falcon-7b-instruct",
         output_dir="artifacts/safety-aware",
         lambda_safety=0.5,
         detector=detector,

@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, List
 
 import numpy as np
-import torch
 from sentence_transformers import SentenceTransformer, util
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from .labels import derive_safety_labels
 from .safety_detection import ViolationDetector
@@ -26,17 +25,7 @@ def generate_responses(
     max_new_tokens: int = 256,
 ) -> List[str]:
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
-    quant_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float16,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-    )
-    model = AutoModelForCausalLM.from_pretrained(
-        model_dir,
-        device_map="auto",
-        quantization_config=quant_config,
-    )
+    model = AutoModelForCausalLM.from_pretrained(model_dir)
     model.eval()
     outputs: List[str] = []
     for context in prompts:

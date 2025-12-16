@@ -5,13 +5,7 @@ from typing import Dict, Optional
 
 import torch
 from datasets import Dataset
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-    Trainer,
-    TrainingArguments,
-)
+from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
 
 from .safety_detection import ViolationDetector
 
@@ -22,37 +16,11 @@ class ModelArtifacts:
     output_dir: str
 
 
-def _quantization_config() -> BitsAndBytesConfig:
-    return BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_compute_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float16,
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_quant_type="nf4",
-    )
-
-
-def load_quantized_model(model_name: str) -> AutoModelForCausalLM:
-    quant_config = _quantization_config()
-    return AutoModelForCausalLM.from_pretrained(
-        model_name,
-        device_map="auto",
-        quantization_config=quant_config,
-    )
-
-
-def load_tokenizer(model_name: str) -> AutoTokenizer:
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    tokenizer.padding_side = "right"
-    tokenizer.pad_token = tokenizer.eos_token
-    return tokenizer
-
-
 def tokenize_dialogue(example: Dict[str, str], tokenizer: AutoTokenizer) -> Dict[str, torch.Tensor]:
     text = f"<s>\n[SYSTEM]\n{example['system']}\n[USER]\n{example['instruction']}\n[ASSISTANT]\n{example['response']}"  # noqa: E501
     tokens = tokenizer(
         text,
         truncation=True,
-        padding="max_length",
         max_length=1024,
     )
     tokens["labels"] = tokens["input_ids"].copy()
@@ -66,10 +34,12 @@ def train_baseline(
     batch_size: int = 2,
     num_epochs: int = 1,
 ) -> ModelArtifacts:
-    tokenizer = load_tokenizer(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer.padding_side = "right"
+    tokenizer.pad_token = tokenizer.eos_token
 
     tokenized = dataset.map(lambda ex: tokenize_dialogue(ex, tokenizer))
-    model = load_quantized_model(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name)
 
     args = TrainingArguments(
         output_dir=output_dir,
@@ -123,7 +93,9 @@ def train_safety_aware(
     detector: Optional[ViolationDetector] = None,
 ) -> ModelArtifacts:
     detector = detector or ViolationDetector()
-    tokenizer = load_tokenizer(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer.padding_side = "right"
+    tokenizer.pad_token = tokenizer.eos_token
 
     def _with_response(example: Dict[str, str]) -> Dict[str, str]:
         tokenized = tokenize_dialogue(example, tokenizer)
@@ -131,7 +103,7 @@ def train_safety_aware(
         return tokenized
 
     tokenized = dataset.map(_with_response)
-    model = load_quantized_model(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name)
 
     args = TrainingArguments(
         output_dir=output_dir,
